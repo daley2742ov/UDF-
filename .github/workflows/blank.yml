@@ -1,0 +1,187 @@
+; Extended (advanced) function to block mouse & keyboard inputs.
+;
+; AutoIt Version: 3.2.12.1+
+; Author: G.Sandler (a.k.a MrCreatoR). Initial idea and hooks example by rasim.
+#EndRegion ======================== BlockInputEx UDF Info ========================
+;
+
+Global $ah_MouseKeyboard_WinHooks[7]
+
+; #FUNCTION# ====================================================================================================
+================
+; Name...........: _BlockInputEx
+; Description ...: Disable/enable the mouse and/or keyboard. Supporting blocking (by include/exclude) of seperate keys.
+; Syntax.........: _BlockInputEx( [iBlockMode [, sExclude [, sInclude [, hWindows]]]] )
+; Parameters ....: $iBlockMode - Set the block mode. -1 = UnBlock all
+;                                        1 = Block All
+;                                        2 = Block only mouse
+;                                        3 = Block only keyboard
+;                                        4 = Block only func keys
+;                                        5 = Block only alpha keys
+;                                        6 = Block only numeric keys
+;                                        7 = Block only arrow keys
+;                                        8 = Block only special keys
+;                  $sExclude   - Keys hex-list (| delimited) to *exclude* when blocking (Only for keyboard blocking).
+;                                 [*] All keys will be blocked, except the keys in $sExclude list.
+;                                 [!] The hex keys list can be found in _IsPressed documentation section.
+;                          [/] For $iBlockMode = 4 to 8, $sExclude will be enable for 1 / disabled for <> 1
+;                  $sInclude   - Keys hex-list (| delimited) to *include* when blocking (Only for keyboard blocking).
+;                                 [*] Only these keys will be blocked, the $sExclude ignored in this case.
+;                                 [!] The hex keys list can be found in _IsPressed documentation section.
+;                          [/] For $iBlockMode = 4 to 8, $sInclude will be enable for 1 / disabled for <> 1
+;                  $hWindows   - Window handles list (| delimited) to limit the blocking process (Only for keyboard blocking).
+; Return values .: Success     - 1.
+;                  Failure     - 0 and set @error to 1. This can happend only when passing wrong parameters.
+; Author(s)......: Rasim, MrCreator, FireFox
+; Modified.......: MrCreator (15/01/09) ; FireFox (15/01/09)
+; Remarks .......: This UDF includes OnAutoItExit function to release the callback/hooks resources.
+;                    [*] See also native BlockInput() documentation.
+; Related .......: BlockInput?
+; ====================================================================================================
+===========================
+Func _BlockInputEx($iBlockMode = -1, $sExclude = '', $sInclude = '', $hWindows = '')
+    If $iBlockMode < -1 Or $iBlockMode > 8 Then Return SetError(1, 0, 0) ;Only -1, 0, 1 and 2 modes are supported.
+    
+    If $iBlockMode = -1 Then Return _BlockInput_UnhookWinHooks_Proc()
+    
+    Local $pStub_KeyProc = 0, $pStub_MouseProc = 0, $hHook_Keyboard = 0, $hHook_Mouse = 0
+    Local $hHook_Module = _WinAPI_GetModuleHandle(0)
+    
+    For $i = 0 To 3
+        If $ah_MouseKeyboard_WinHooks[$i] > 0 Then
+            _BlockInput_UnhookWinHooks_Proc()
+            ExitLoop
+        EndIf
+    Next
+    
+    If $iBlockMode = 1 Or $iBlockMode = 2 Then
+        $pStub_MouseProc = DllCallbackRegister("_MouseHook_Proc", "int", "int;ptr;ptr")
+        $hHook_Mouse = _WinAPI_SetWindowsHookEx($WH_MOUSE_LL, DllCallbackGetPtr($pStub_MouseProc), $hHook_Module, 0)
+    EndIf
+    
+    If $iBlockMode = 1 Or $iBlockMode = 3 Then
+        $pStub_KeyProc = DllCallbackRegister("_KeyBoardHook_Proc", "int", "int;ptr;ptr")
+        $hHook_Keyboard = _WinAPI_SetWindowsHookEx($WH_KEYBOARD_LL, DllCallbackGetPtr($pStub_KeyProc), $hHook_Module, 0)
+    ElseIf $iBlockMode = 4 Then
+        $pStub_KeyProc = DllCallbackRegister("_KeyBoardHook_Proc", "int", "int;ptr;ptr")
+        $hHook_Keyboard = _WinAPI_SetWindowsHookEx($WH_KEYBOARD_LL, DllCallbackGetPtr($pStub_KeyProc), $hHook_Module, 0)
+        If $sExclude = 1 Then
+            $sExclude = '0x70|0x71|0x72|0x73|0x74|0x75|0x76|0x77|0x78|0x79|0x7A|0x7B|0x7C|0x7D|0x7E|0x7F' & _
+                    '|0x80H|0x81H|0x82H|0x83H|0x84H|0x85H|0x86H|0x87H'
+        ElseIf $sInclude = 1 Then
+            $sInclude = '0x70|0x71|0x72|0x73|0x74|0x75|0x76|0x77|0x78|0x79|0x7A|0x7B|0x7C|0x7D|0x7E|0x7F' & _
+                    '|0x80H|0x81H|0x82H|0x83H|0x84H|0x85H|0x86H|0x87H'
+        EndIf
+    ElseIf $iBlockMode = 5 Then
+        $pStub_KeyProc = DllCallbackRegister("_KeyBoardHook_Proc", "int", "int;ptr;ptr")
+        $hHook_Keyboard = _WinAPI_SetWindowsHookEx($WH_KEYBOARD_LL, DllCallbackGetPtr($pStub_KeyProc), $hHook_Module, 0)
+        If $sExclude = 1 Then
+            $sExclude = '0x41|0x42|0x43|0x44|0x45|0x46|0x47|0x48|0x49|0x4A|0x4B|0x4C|0x4D|0x4E|0x4F|0x50' & _
+                    '|0x51|0x52|0x53|0x54|0x55|0x56|0x57|0x58|0x59|0x5A'
+        ElseIf $sInclude = 1 Then
+            $sInclude = '0x41|0x42|0x43|0x44|0x45|0x46|0x47|0x48|0x49|0x4A|0x4B|0x4C|0x4D|0x4E|0x4F|0x50' & _
+                    '|0x51|0x52|0x53|0x54|0x55|0x56|0x57|0x58|0x59|0x5A'
+        EndIf
+    ElseIf $iBlockMode = 6 Then
+        If $sExclude = 1 Then
+            $sExclude = '0x30|0x31|0x32|0x33|0x34|0x35|0x36|0x37|0x38|0x39|0x60|0x61|0x62|0x63|0x64|0x65' & _
+                    '|0x66|0x67|0x68|0x69'
+        ElseIf $sInclude = 1 Then
+            $sInclude = '0x30|0x31|0x32|0x33|0x34|0x35|0x36|0x37|0x38|0x39|0x60|0x61|0x62|0x63|0x64|0x65' & _
+                    '|0x66|0x67|0x68|0x69'
+        EndIf
+    ElseIf $iBlockMode = 7 Then
+        If $sExclude = 1 Then
+            $sExclude = '0x25|0x26|0x27|0x28'
+        ElseIf $sInclude = 1 Then
+            $sInclude = '0x25|0x26|0x27|0x28'
+        EndIf
+    ElseIf $iBlockMode = 8 Then
+        If $sExclude = 1 Then
+            $sExclude = '0x08|0x09|0x0C|0x0D|0x10|0x11|0x12|0x13|0x14|0x1B|0x20|0x21|0x22|0x23|0x24' & _
+                    '|0x29|0x2A|0x2B|0x2C|0x2D|0x2E|0x5B|0x5C|0x6A|0x6B|0x6C|0x6D|0x6E|0x6F|0x90|0x91|0xA0' & _
+                    '|0xA1|0xA2|0xA3|0xA4|0xA5|0xBA|0xBB|0xBC|0xBD|0xBE|0xBF|0xC0|0xDB|0xDC|0xDD'
+        ElseIf $sInclude = 1 Then
+            $sInclude = '0x08|0x09|0x0C|0x0D|0x10|0x11|0x12|0x13|0x14|0x1B|0x20|0x21|0x22|0x23|0x24' & _
+                    '|0x29|0x2A|0x2B|0x2C|0x2D|0x2E|0x5B|0x5C|0x6A|0x6B|0x6C|0x6D|0x6E|0x6F|0x90|0x91|0xA0' & _
+                    '|0xA1|0xA2|0xA3|0xA4|0xA5|0xBA|0xBB|0xBC|0xBD|0xBE|0xBF|0xC0|0xDB|0xDC|0xDD'
+        EndIf
+    EndIf
+    
+    $ah_MouseKeyboard_WinHooks[0] = $pStub_KeyProc
+    $ah_MouseKeyboard_WinHooks[1] = $pStub_MouseProc
+    $ah_MouseKeyboard_WinHooks[2] = $hHook_Keyboard
+    $ah_MouseKeyboard_WinHooks[3] = $hHook_Mouse
+    $ah_MouseKeyboard_WinHooks[4] = "|" & $sInclude & "|"
+    $ah_MouseKeyboard_WinHooks[5] = "|" & $sExclude & "|"
+    $ah_MouseKeyboard_WinHooks[6] = "|" & $hWindows & "|"
+    
+    Return 1
+EndFunc   ;==>_BlockInputEx
+
+;KeyBoard hook processing function
+Func _KeyBoardHook_Proc($nCode, $wParam, $lParam)
+    If $nCode < 0 Then Return _WinAPI_CallNextHookEx($ah_MouseKeyboard_WinHooks[4], $nCode, $wParam, $lParam)
+    
+    Local $KBDLLHOOKSTRUCT = DllStructCreate("dword vkCode;dword scanCode;dword flags;dword time;ptr dwExtraInfo", $lParam)
+    Local $vkCode = "0x" & Hex(DllStructGetData($KBDLLHOOKSTRUCT, "vkCode"), 2)
+    
+    Local $sInclude = $ah_MouseKeyboard_WinHooks[4]
+    Local $sExclude = $ah_MouseKeyboard_WinHooks[5]
+    Local $hWnds = $ah_MouseKeyboard_WinHooks[6]
+    
+    If $sInclude <> "||" Then ;Include proc
+        If StringInStr($sInclude, "|" & $vkCode & "|") And _
+                ($hWnds = "||" Or StringInStr($hWnds, "|" & WinGetHandle("[ACTIVE]") & "|")) Then Return 1 ;Block processing!
+    Else ;Exclude proc
+        If Not StringInStr($sExclude, "|" & $vkCode & "|") And _
+                ($hWnds = "||" Or StringInStr($hWnds, "|" & WinGetHandle("[ACTIVE]") & "|")) Then Return 1 ;Block processing!
+    EndIf
+    
+    _WinAPI_CallNextHookEx($ah_MouseKeyboard_WinHooks[2], $nCode, $wParam, $lParam) ;Continue processing
+EndFunc   ;==>_KeyBoardHook_Proc
+
+;Mouse hook processing function
+Func _MouseHook_Proc($nCode, $wParam, $lParam)
+    If $nCode < 0 Then Return _WinAPI_CallNextHookEx($ah_MouseKeyboard_WinHooks[3], $nCode, $wParam, $lParam) ;Continue processing
+    
+    Return 1 ;Block processing!
+EndFunc   ;==>_MouseHook_Proc
+
+;Releases callbacks and Unhook Windows hooks
+Func _BlockInput_UnhookWinHooks_Proc()
+    If $ah_MouseKeyboard_WinHooks[0] > 0 Then DllCallbackFree($ah_MouseKeyboard_WinHooks[0])
+    If $ah_MouseKeyboard_WinHooks[1] > 0 Then DllCallbackFree($ah_MouseKeyboard_WinHooks[1])
+    
+    If $ah_MouseKeyboard_WinHooks[2] > 0 Then _WinAPI_UnhookWindowsHookEx($ah_MouseKeyboard_WinHooks[2])
+    If $ah_MouseKeyboard_WinHooks[3] > 0 Then _WinAPI_UnhookWindowsHookEx($ah_MouseKeyboard_WinHooks[3])
+    
+    For $i = 0 To 3
+        $ah_MouseKeyboard_WinHooks[$i] = 0
+    Next
+    
+    Return 1
+EndFunc   ;==>_BlockInput_UnhookWinHooks_Proc
+
+;Called when script exits to release resources.
+Func OnAutoItExit()
+    _BlockInputEx(0)
+EndFunc   ;==>OnAutoItExitoÝ÷ ØLZ^jëh×6#include <BlockInputEx.au3>
+
+;================== hWindows usage Example ==================
+
+HotKeySet("{ESC}", "_Quit") ;This will trigger an exit
+
+;Here we block alphabetic keyboard keys :
+_BlockInputEx(5, 0, 1)
+
+;This is only for testing, so if anything go wrong, the script will exit after 10 seconds.
+AdlibEnable("_Quit", 10000)
+
+While 1
+    Sleep(100)
+WEnd
+
+Func _Quit()
+    Exit
+EndFunc
